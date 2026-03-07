@@ -17,6 +17,17 @@
     - [5.5.3. Repository](#553-repository)
     - [5.5.4. Services](#554-services)
     - [5.5.5. Viết tách ra cho chuẩn cấu trúc](#555-viết-tách-ra-cho-chuẩn-cấu-trúc)
+- [Phần 6. Cấu trúc dự án](#phần-6-cấu-trúc-dự-án)
+  - [6.1. Thư mục `src/core/`](#61-thư-mục-srccore)
+  - [6.2. Thư mục `src/database/`](#62-thư-mục-srcdatabase)
+    - [6.2.1. Kết nối database](#621-kết-nối-database)
+    - [6.2.2. Thư mục `src/database/models/`](#622-thư-mục-srcdatabasemodels)
+    - [6.2.3. Thư mục `src/database/repositories/`](#623-thư-mục-srcdatabaserepositories)
+    - [6.2.4. Thư mục `src/database/migrations/`](#624-thư-mục-srcdatabasemigrations)
+  - [6.3. Thư mục `src/schemas/`](#63-thư-mục-srcschemas)
+  - [6.4. Thư mục `src/services/`](#64-thư-mục-srcservices)
+  - [6.5. Thư mục `src/api/`](#65-thư-mục-srcapi)
+  - [6.6. Thư mục `src/api/dependencies/` hoặc `src/dependencies/`](#66-thư-mục-srcapidependencies-hoặc-srcdependencies)
 
 > Môi trường phát triển Window
 
@@ -416,7 +427,7 @@ def add_task(task: TaskCreate):
     return new_task
 
 # api/                       <- router
-@router.get('/{id}')
+@router.get("/{id}", response_model=Task)
 def get_task(id: int):
     # toàn bộ phần dưới là nghiệp vụ serviecs/ trừ dòng return
     res = next((task for task in task_list if task["id"] == id), None)
@@ -588,3 +599,199 @@ get_task_repository(1)
 task_list
 ```
 
+
+# Phần 6. Cấu trúc dự án
+```
+src/
+├── core/
+├── database/
+│   ├── models/
+│   ├── repositories/
+│   └── migrations/
+├── schemas/
+├── services/
+└── api/
+    ├── routers/
+    └── dependencies/
+```
+
+hoặc:
+
+```
+src/
+├── core/
+├── database/
+│   ├── models/
+│   ├── repositories/
+│   └── migrations/
+├── schemas/
+├── services/
+├── api/
+│   └── routers/
+└── dependencies/   
+```
+
+Tùy người thiết kế.
+
+## 6.1. Thư mục `src/core/`
+
+> [!NOTE]
+> Lưu cấu hình trung tâm
+> + `settings.py`: Cấu hình hệ thống (Quản lý: Biến môi trường, Database URL, Secret Key, CORS, Debug mode)
+> + `security.py`: Bảo mật (Hash password, JWT Token, OAuth2, Authentication logic)
+> + `logging.py`: Ghi log hệ thống (ghi log request, ghi log lỗi, theo dõi hệ thống)
+> + `constants.py`: Hằng số hệ thống (chứa các giá trị không thể thay đổi)
+
+```
+src/
+└── core/
+    ├── settings.py # Cấu hình, dữ liệu nhạy cảm lấy từ file .env
+    ├── security.py
+    ├── logging.py
+    └── constants.py
+```
+
+## 6.2. Thư mục `src/database/`
+
+### 6.2.1. Kết nối database
+
+> [!NOTE]
+> Kết nối database:
+> + `database.py`: Tạo engine (kết nối database, cấu hình engine)
+> + `session.py`: Quản lý session (tránh rò rỉ khi kết nối)
+> + `base.py`: Base ORM (tạo class Base để các model kế thừa). Class Base này dùng để tạo các bảng
+
+
+> [!IMPORTANT]
+> Phân biệt
+> 
+> ```python
+> from sqlalchemy.orm import declarative_base
+> Base = declarative_base() # Class Base ORM dùng để tạo bảng
+> ```
+> 
+> ```python
+> from pydantic import BaseModel # Class BaseModel dùng để lọc dữ liệu
+> ```
+
+### 6.2.2. Thư mục `src/database/models/`
+
+> [!NOTE]
+> Lưu giữ các file tạo bảng database
+> + Mapping bảng db thành class Python
+
+### 6.2.3. Thư mục `src/database/repositories/`
+
+> [!NOTE]
+> Lưu giữ các file hàm truy vấn database
+
+### 6.2.4. Thư mục `src/database/migrations/`
+
+> [!NOTE]
+> Alembic Migration (được Alembic tạo ra) (quản lí thay đổi schema DB, version control cho database)
+
+## 6.3. Thư mục `src/schemas/`
+
+> [!NOTE]
+> Dùng để:
+> + Lọc, lấy ép form dữ liệu đầu vào
+> + Ép form dữ liệu đầu ra
+> + Định nghĩa contract API
+
+> [!IMPORTANT]
+> Xem phần `Important` ở [6.2.1. Kết nối database](#621-kết-nối-database)
+
+
+> [!CAUTION]
+> Phân biệt: 
+> + File `base.py` ở `database/` dùng để tạo class `Base`, dùng để tạo bảng.
+> + Các file ở `schemas/` dùng class `BaseModel` dùng để lọc, ép form dữ liệu.
+
+## 6.4. Thư mục `src/services/`
+
+> [!NOTE]
+> Lưu trữ các file, hàm nghiệp vụ:
+> + Không validate (hiểu nôm na là ép form) cấu trúc request (việc đó do schemas)
+> + Không truy vấn DB (việc đó do `repository/`)
+> + Không xử lý HTTP (việc đó do `api/` cụ thể là `router`)
+
+**Service có thể làm gì:**
+Ví dụ: tạo task.
+
+- Không chỉ đơn giản là thêm vào DB.
+- Nghiệp vụ có thể gồm:
+  - Kiểm tra trùng tên
+
+  - Chuẩn hóa dữ liệu
+
+  - Ghi log
+
+  - Gửi event
+
+  - Xử lý transaction
+
+Như vậy `repository/` chỉ lập hàm truy vấn database. Còn `services/` thực hiện nghiệp vụ truy vấn database, chỉ việc gọi lại hàm có trong `repository/` và sử dụng, bổ sung thêm để hoàn chỉnh nghiệp vụ.
+
+## 6.5. Thư mục `src/api/`
+
+> [!NOTE]
+> `api/` là interface layer của hệ thống. Nó chịu trách nhiệm:
+> - Định nghĩa route (GET, POST, PUT, DELETE…)
+> - Nhận request
+> - Gắn dependency
+> - Trả response
+> - Gắn response_model
+> - Xử lý HTTP exception
+> - Nó không chứa nghiệp vụ.
+
+
+**Cấu trúc cơ bản:**
+
+```
+app/
+├── api/
+│   ├── routers/
+│   │   ├── user_router.py
+│   │   ├── task_router.py
+│   │   └── __init__.py
+│   │
+│   ├── dependencies/
+│   └── api_router.py
+```
+
+## 6.6. Thư mục `src/api/dependencies/` hoặc `src/dependencies/`
+
+> [!NOTE]
+> Chứa các hàm:
+> 
+> - Xác thực (auth)
+> - Phân quyền (authorization)
+> - Inject DB session
+> - Inject current user
+> - Inject service/repository nếu muốn
+> - Reusable dependency logic
+> 
+> Nó thuộc API layer, vì nó phục vụ HTTP request.
+
+
+**Ví dụ, cấu trúc:**
+
+```
+app/
+├── api/
+│   ├── routers/
+│   └── dependencies/
+│       ├── auth.py
+│       ├── permissions.py
+│       └── db.py
+```
+
+hoặc:
+
+```
+app/
+├── dependencies/
+├── api/
+```
+
+Tùy theo phong cách tổ chức.
