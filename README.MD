@@ -28,6 +28,29 @@
   - [6.4. Thư mục `src/services/`](#64-thư-mục-srcservices)
   - [6.5. Thư mục `src/api/`](#65-thư-mục-srcapi)
   - [6.6. Thư mục `src/api/dependencies/` hoặc `src/dependencies/`](#66-thư-mục-srcapidependencies-hoặc-srcdependencies)
+- [Phần 7. Học SQLALCHEMY](#phần-7-học-sqlalchemy)
+  - [7.1. SQL cơ bản](#71-sql-cơ-bản)
+    - [7.1.1. Tạo database](#711-tạo-database)
+    - [7.1.2. Tạo bảng](#712-tạo-bảng)
+    - [7.1.3. SELECT](#713-select)
+    - [7.1.4. JOIN](#714-join)
+    - [7.1.5. INDEX](#715-index)
+    - [7.1.6. TRANSACTION](#716-transaction)
+    - [7.1.7. SELECT P2](#717-select-p2)
+      - [7.1.7.1. Chọn tất cả các cột](#7171-chọn-tất-cả-các-cột)
+      - [7.1.7.2. Chọn cột cụ thể và đặt bí danh (Alias)](#7172-chọn-cột-cụ-thể-và-đặt-bí-danh-alias)
+      - [7.1.7.3. Loại bỏ dữ liệu trùng lặp (DISTINCT)](#7173-loại-bỏ-dữ-liệu-trùng-lặp-distinct)
+    - [7.1.8. WHERE (LỌC DỮ LIỆU)](#718-where-lọc-dữ-liệu)
+      - [7.1.8.1. Các toán tử logic (AND, OR, NOT)](#7181-các-toán-tử-logic-and-or-not)
+      - [7.1.8.2. Các toán tử đặc biệt (IN, BETWEEN, LIKE)](#7182-các-toán-tử-đặc-biệt-in-between-like)
+      - [7.1.8.3. Xử lý giá trị NULL](#7183-xử-lý-giá-trị-null)
+    - [7.1.9. SẮP XẾP VÀ GIỚI HẠN DỮ LIỆU](#719-sắp-xếp-và-giới-hạn-dữ-liệu)
+      - [7.1.9.1. ORDER BY (Sắp xếp)](#7191-order-by-sắp-xếp)
+      - [7.1.9.2. LIMIT (Giới hạn số dòng)](#7192-limit-giới-hạn-số-dòng)
+    - [7.1.10. NHÓM DỮ LIỆU VÀ HÀM TỔNG HỢP](#7110-nhóm-dữ-liệu-và-hàm-tổng-hợp)
+      - [7.1.10.1. Các hàm tổng hợp (Aggregate Functions)](#71101-các-hàm-tổng-hợp-aggregate-functions)
+      - [7.1.10.2. GROUP BY (Nhóm theo cột)](#71102-group-by-nhóm-theo-cột)
+      - [7.1.10.3. HAVING (Lọc sau khi nhóm)](#71103-having-lọc-sau-khi-nhóm)
 
 > Môi trường phát triển Window
 
@@ -558,10 +581,10 @@ if __name__ == "__main__":
 ```
 
 > **Ví dụ: Khi build API:**
-> > ```
-> > POST /tasks
-> > GET /tasks/1
-> > ```
+>    ```
+>    POST /tasks
+>    GET /tasks/1
+>    ```
 
 Hoặc ta có thể cấu hình prefix thủ công như sau:
 
@@ -795,3 +818,353 @@ app/
 ```
 
 Tùy theo phong cách tổ chức.
+
+# Phần 7. Học SQLALCHEMY
+
+## 7.1. SQL cơ bản
+
+### 7.1.1. Tạo database
+
+***`query.sql`:***
+
+```sql
+-- Tạo database pc_shop
+CREATE DATABASE pc_shop;
+
+-- Chọn sử dụng thao tác trên pc_shop
+USE pc_shop;
+```
+
+### 7.1.2. Tạo bảng
+***`query.sql`:***
+```sql
+-- Bảng Users: Lưu thông tin người dùng
+CREATE TABLE Users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY, -- Khóa chính, tự tăng
+    username VARCHAR(50) NOT NULL UNIQUE, -- Tên đăng nhập, không null, duy nhất
+    email VARCHAR(100) NOT NULL, -- Email, không null
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Thời gian tạo mặc định là hiện tại
+    status TINYINT DEFAULT 1 -- Trạng thái: 1=Active, 0=Inactive
+);
+
+-- Bảng Orders: Lưu thông tin đơn hàng
+CREATE TABLE Orders (
+    order_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL, -- Khóa ngoại liên kết sang bảng Users
+    order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    total_amount DECIMAL(10, 2) NOT NULL, -- Số thập phân chính xác cho tiền tệ
+    status VARCHAR(20) DEFAULT 'PENDING',
+
+    -- Định nghĩa khóa ngoại (Foreign Key)
+    CONSTRAINT fk_user_order  -- Đặt tên cho ràng buộc (thao tác sau sẽ dễ hơn)
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+    ON DELETE CASCADE                       -- Xóa user thì xóa luôn đơn hàng
+    ON UPDATE CASCADE                       -- Cập nhật user_id thì cập nhật theo
+);
+```
+
+> [!NOTE]
+> Các bảng có khóa ngoại (`FOREIGN KEY`) liên kết đến bảng có khóa chính (`PRIMARY KEY`): **Bảng có khóa ngoại là con của bảng có khóa chính**.
+>
+> Trong trường hợp trên, ta có thể vẽ một cây như sau:
+>
+>           [Users]
+>             /
+>        [Orders]
+
+
+### 7.1.3. SELECT
+
+> [!NOTE] Cú pháp chung:
+>
+>       SELECT cot1, cot2, ...
+>       FROM ten_bang
+>       WHERE dieu_kien
+>       ORDER BY cot_sap_xep
+>       LIMIT so_luong;
+
+### 7.1.4. JOIN
+
+```sql
+-- INNER JOIN: Chỉ lấy người dùng có đặt hàng
+SELECT
+u.username,
+u.email,
+o.order_id,
+o.total_amount
+FROM Users u
+INNER JOIN Orders o ON u.user_id = o.user_id;
+
+-- LEFT JOIN: Lấy tất cả người dùng, kể cả người chưa đặt hàng
+SELECT
+u.username,
+o.order_id,
+o.total_amount
+FROM Users u
+LEFT JOIN Orders o ON u.user_id = o.user_id;
+
+-- Mô phỏng FULL OUTER JOIN trong MySQL
+SELECT u.username, o.order_id
+FROM Users u
+LEFT JOIN Orders o ON u.user_id = o.user_id
+UNION
+SELECT u.username, o.order_id
+FROM Users u
+RIGHT JOIN Orders o ON u.user_id = o.user_id;
+```
+
+### 7.1.5. INDEX
+> [!NOTE]
+> INDEX là cấu trúc dữ liệu giúp tăng tốc độ truy vấn (SELECT) nhưng làm giảm tốc độ ghi (INSERT, UPDATE, DELETE) do phải cập nhật chỉ mục.
+
+
+> [!NOTE] Khi nào dùng INDEX:
+>  Khi nào cần tạo INDEX
+> 
+> + Cột thường xuyên dùng trong mệnh đề WHERE
+> + Cột dùng để JOIN
+> + Cột dùng trong ORDER BY hoặc GROUP BY
+> + Cột có tính chọn lọc cao (High Cardinality), ví dụ: email, username. Không nên index cột giới tính (chỉ có Nam/Nữ)
+
+```sql
+-- Tạo index đơn cho cột email
+CREATE INDEX idx_users_email ON Users(email);
+-- Tạo index kết hợp (Composite Index) cho cột user_id và order_date
+CREATE INDEX idx_orders_user_date ON Orders(user_id, order_date);
+-- Tạo index duy nhất (Unique Index)
+CREATE UNIQUE INDEX idx_users_username ON Users(username);
+```
+
+> Sử dụng lệnh EXPLAIN trước câu truy vấn để xem MySQL có sử dụng index hay không
+> 
+>  ```sql
+>  EXPLAIN SELECT * FROM Orders WHERE user_id = 1;
+>  ```
+
+### 7.1.6. TRANSACTION
+> [!NOTE]
+> Transaction là một đơn vị công việc logic được thực hiện như một khối duy nhất. Hoặc tất cả cùng thành công, hoặc tất cả cùng thất bại
+
+> [!NOTE] Tính chất ACID
+> + Atomicity (Nguyên tử): Không thể chia nhỏ. Thành công hết hoặc thất bại hết
+> + Consistency (Nhất quán): Dữ liệu luôn đúng trạng thái quy định sau giao dịch
+> + Isolation (Cô lập): Các giao dịch chạy song song không ảnh hưởng nhau
+> + Durability (Bền vững): Khi đã commit, dữ liệu được lưu vĩnh viễn dù có lỗi hệ thống
+
+**Giả sử người dùng A chuyển cho người dùng B 100 USD. Cần trừ tiền A và cộng tiền B. Nếu bước cộng tiền lỗi, bước trừ tiền phải được hoàn tác**
+
+```sql
+-- Bắt đầu giao dịch
+START TRANSACTION;
+-- Bước 1: Trừ tiền người gửi (Giả sử user_id = 1)
+UPDATE Accounts
+SET balance = balance - 100
+WHERE user_id = 1 AND balance >= 100; -- Kiểm tra số dư đủ
+-- Kiểm tra số hàng bị ảnh hưởng (trong code ứng dụng)
+-- Nếu số hàng = 0 nghĩa là không đủ tiền -> ROLLBACK
+-- Bước 2: Cộng tiền người nhận (Giả sử user_id = 2)
+UPDATE Accounts
+SET balance = balance + 100
+WHERE user_id = 2;
+-- Nếu mọi thứ thành công
+COMMIT;
+-- Nếu có lỗi xảy ra ở bất kỳ đâu
+ROLLBACK;
+```
+
+### 7.1.7. SELECT P2
+
+> [!NOTE] Cú pháp chung:
+> ```
+> SELECT cot1, cot2, ...
+> FROM ten_bang
+> WHERE dieu_kien
+> ORDER BY cot_sap_xep
+> LIMIT so_luong;
+> ```
+
+#### 7.1.7.1. Chọn tất cả các cột
+
+```sql
+-- Lấy tất cả dữ liệu từ bảng Users
+SELECT * FROM Users;
+```
+
+#### 7.1.7.2. Chọn cột cụ thể và đặt bí danh (Alias)
+
+```sql
+-- Chọn tên và email, đổi tên cột hiển thị
+SELECT
+username AS ten_dang_nhap,
+email AS dia_chi_email
+FROM Users;
+
+-- Tính toán trực tiếp trong câu lệnh SELECT
+SELECT
+user_id,
+total_amount,
+total_amount * 0.1 AS thue_phai_dong
+FROM Orders;
+```
+
+#### 7.1.7.3. Loại bỏ dữ liệu trùng lặp (DISTINCT)
+Sử dụng khi cần lấy danh sách các giá trị duy nhất từ một cột.
+
+```sql
+-- Lấy danh sách các trạng thái đơn hàng duy nhất đã tồn tại
+SELECT DISTINCT status FROM Orders;
+```
+
+
+### 7.1.8. WHERE (LỌC DỮ LIỆU)
+
+> [!NOTE]
+> Mệnh đề WHERE dùng để lọc các bản ghi thỏa mãn điều kiện cụ thể trước khi trả về kết quả.
+> 
+> Các toán tử so sánh:
+> 
+>       = (Bằng), <> hoặc != (Khác), > (Lớn hơn), < (Nhỏ hơn), >= (Lớn hơn hoặc bằng), <= (Nhỏ hơn hoặc bằng)
+
+```sql
+-- Lấy người dùng có trạng thái hoạt động (status = 1)
+SELECT * FROM Users WHERE status = 1;
+
+-- Lấy đơn hàng có tổng tiền lớn hơn 1000
+SELECT * FROM Orders WHERE total_amount > 1000;
+```
+
+#### 7.1.8.1. Các toán tử logic (AND, OR, NOT)
+
+```sql
+-- Lấy đơn hàng của user_id = 1 VÀ có trạng thái PENDING
+SELECT * FROM Orders
+WHERE user_id = 1 AND status = 'PENDING';
+
+-- Lấy đơn hàng có trạng thái PENDING HOẶC SHIPPED
+SELECT * FROM Orders
+WHERE status = 'PENDING' OR status = 'SHIPPED';
+```
+
+#### 7.1.8.2. Các toán tử đặc biệt (IN, BETWEEN, LIKE)
+
+> [!NOTE]
+> + IN: Kiểm tra giá trị nằm trong một tập hợp.
+> + BETWEEN: Kiểm tra giá trị nằm trong một khoảng.
+> + LIKE: Tìm kiếm theo mẫu chuỗi (sử dụng ký tự đại diện % và _).
+
+```sql
+-- Lấy đơn hàng của các user_id cụ thể
+SELECT * FROM Orders
+WHERE user_id IN (1, 5, 10);
+
+-- Lấy đơn hàng tạo trong khoảng thời gian từ 2023-01-01 đến 2023-12-31
+SELECT * FROM Orders
+WHERE order_date BETWEEN '2023-01-01' AND '2023-12-31';
+
+-- Tìm người dùng có tên bắt đầu bằng chữ 'A'
+SELECT * FROM Users
+WHERE username LIKE 'A%';
+
+-- Tìm người dùng có email chứa ký tự '@gmail.com'
+SELECT * FROM Users
+WHERE email LIKE '%@gmail.com';
+```
+
+#### 7.1.8.3. Xử lý giá trị NULL
+> [!NOTE]
+> Không dùng = NULL, phải dùng IS NULL hoặc IS NOT NULL.
+
+```sql
+-- Lấy người dùng chưa có thông tin email (giả sử cột email cho phép NULL)
+SELECT * FROM Users WHERE email IS NULL;
+```
+
+### 7.1.9. SẮP XẾP VÀ GIỚI HẠN DỮ LIỆU
+#### 7.1.9.1. ORDER BY (Sắp xếp)
+
+> [!NOTE]
+> Mặc định sắp xếp tăng dần (ASC). Có thể sắp xếp giảm dần (DESC).
+
+```sql
+-- Sắp xếp đơn hàng theo ngày tạo mới nhất trước
+SELECT * FROM Orders
+ORDER BY order_date DESC;
+
+-- Sắp xếp theo nhiều điều kiện: Theo user_id tăng dần, sau đó theo tổng tiền giảm dần
+SELECT * FROM Orders
+ORDER BY user_id ASC, total_amount DESC;
+```
+
+#### 7.1.9.2. LIMIT (Giới hạn số dòng)
+
+> [!CAUTION]
+> Thường dùng cho phân trang (pagination) trong ứng dụng Web hoặc Mobile.
+
+```sql
+-- Lấy 10 đơn hàng gần nhất
+SELECT * FROM Orders
+ORDER BY order_date DESC
+LIMIT 10;
+
+-- Phân trang: Lấy trang thứ 2, mỗi trang 10 bản ghi (Bỏ qua 10 bản ghi đầu, lấy 10 bản ghi tiếp)
+-- Công thức: OFFSET = (so_trang - 1) * so_ban_ghi_tren_trang
+SELECT * FROM Orders
+LIMIT 10 OFFSET 10;
+```
+
+### 7.1.10. NHÓM DỮ LIỆU VÀ HÀM TỔNG HỢP
+
+> [!Caution]
+> Dùng cho các báo cáo thống kê (Analytics).
+
+
+#### 7.1.10.1. Các hàm tổng hợp (Aggregate Functions)
+
+> [!NOTE]
+> + `COUNT()`: Đếm số lượng.
+> + `SUM()`: Tính tổng.
+> + `AVG()`: Tính trung bình.
+> + `MAX()`: Tìm giá trị lớn nhất.
+> + `MIN()`: Tìm giá trị nhỏ nhất.
+
+```sql
+-- Đếm tổng số đơn hàng
+SELECT COUNT(*) AS tong_so_don FROM Orders;
+
+-- Tính tổng doanh thu
+SELECT SUM(total_amount) AS tong_doanh_thu FROM Orders;
+
+-- Tính trung bình giá trị đơn hàng
+SELECT AVG(total_amount) AS gia_tri_trung_binh FROM Orders;
+```
+
+#### 7.1.10.2. GROUP BY (Nhóm theo cột)
+
+> [!NOTE]
+> Chia dữ liệu thành các nhóm để tính toán trên từng nhóm
+
+```sql
+-- Đếm số đơn hàng của từng người dùng
+SELECT user_id, COUNT(*) AS so_don_hang
+FROM Orders
+GROUP BY user_id;
+
+-- Tính tổng doanh thu theo trạng thái đơn hàng
+SELECT status, SUM(total_amount) AS doanh_thu_theo_trang_thai
+FROM Orders
+GROUP BY status;
+```
+
+#### 7.1.10.3. HAVING (Lọc sau khi nhóm)
+
+> [!NOTE]
+> Khác với WHERE (lọc trước khi nhóm), HAVING lọc kết quả sau khi đã thực hiện GROUP BY
+
+```sql
+-- Lấy những người dùng có nhiều hơn 5 đơn hàng
+SELECT user_id, COUNT() AS so_don_hang
+FROM Orders
+GROUP BY user_id
+HAVING COUNT() > 5;
+```
+
