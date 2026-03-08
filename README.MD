@@ -825,8 +825,6 @@ Tùy theo phong cách tổ chức.
 
 ### 7.1.1. Tạo database
 
-***`query.sql`:***
-
 ```sql
 -- Tạo database pc_shop
 CREATE DATABASE pc_shop;
@@ -836,7 +834,7 @@ USE pc_shop;
 ```
 
 ### 7.1.2. Tạo bảng
-***`query.sql`:***
+
 ```sql
 -- Bảng Users: Lưu thông tin người dùng
 CREATE TABLE Users (
@@ -875,7 +873,8 @@ CREATE TABLE Orders (
 
 ### 7.1.3. SELECT
 
-> [!NOTE] Cú pháp chung:
+> [!NOTE] 
+> Cú pháp chung:
 >
 >       SELECT cot1, cot2, ...
 >       FROM ten_bang
@@ -918,7 +917,8 @@ RIGHT JOIN Orders o ON u.user_id = o.user_id;
 > INDEX là cấu trúc dữ liệu giúp tăng tốc độ truy vấn (SELECT) nhưng làm giảm tốc độ ghi (INSERT, UPDATE, DELETE) do phải cập nhật chỉ mục.
 
 
-> [!NOTE] Khi nào dùng INDEX:
+> [!NOTE] 
+> Khi nào dùng INDEX:
 >  Khi nào cần tạo INDEX
 > 
 > + Cột thường xuyên dùng trong mệnh đề WHERE
@@ -945,7 +945,8 @@ CREATE UNIQUE INDEX idx_users_username ON Users(username);
 > [!NOTE]
 > Transaction là một đơn vị công việc logic được thực hiện như một khối duy nhất. Hoặc tất cả cùng thành công, hoặc tất cả cùng thất bại
 
-> [!NOTE] Tính chất ACID
+> [!NOTE] 
+> Tính chất ACID
 > + Atomicity (Nguyên tử): Không thể chia nhỏ. Thành công hết hoặc thất bại hết
 > + Consistency (Nhất quán): Dữ liệu luôn đúng trạng thái quy định sau giao dịch
 > + Isolation (Cô lập): Các giao dịch chạy song song không ảnh hưởng nhau
@@ -974,7 +975,8 @@ ROLLBACK;
 
 ### 7.1.7. SELECT P2
 
-> [!NOTE] Cú pháp chung:
+> [!NOTE] 
+> Cú pháp chung:
 > ```
 > SELECT cot1, cot2, ...
 > FROM ten_bang
