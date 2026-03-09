@@ -73,7 +73,7 @@
   - [8.2. Import cấu hình nhạy cảm vào file `tests/src/core/settings.py`](#82-import-cấu-hình-nhạy-cảm-vào-file-testssrccoresettingspy)
     - [8.2.1. Cấu trúc sườn](#821-cấu-trúc-sườn)
     - [8.2.2. Import cấu hình](#822-import-cấu-hình)
-    - [8.3. Tạo cấu hình `engine` và `session`](#83-tạo-cấu-hình-engine-và-session)
+  - [8.3. Tạo cấu hình `engine` và `session`](#83-tạo-cấu-hình-engine-và-session)
     - [8.3.1. `database.py`](#831-databasepy)
     - [8.3.2. `session.py`](#832-sessionpy)
   - [8.4. Tạo API cho tài khoản đăng ký mới](#84-tạo-api-cho-tài-khoản-đăng-ký-mới)
@@ -1931,7 +1931,7 @@ def DATABASE_URL(self) -> str:
     )
 ```
 
-### 8.3. Tạo cấu hình `engine` và `session`
+## 8.3. Tạo cấu hình `engine` và `session`
 
 ```
 tests/
