@@ -1364,6 +1364,24 @@ parent = relationship(
 
 > `back_populates` = "tao và mày liên kết với nhau" – phải khai báo cả 2 phía và tên phải khớp chéo nhau
 
+```python
+class Parent(Base):
+    children = relationship(
+        "Child",
+        back_populates="parent"   # ← tên attribute bên Child
+    )                             #              ↓
+                                  #   phải khớp với cái này
+class Child(Base):                #              ↓
+    parent = relationship(        # ← "parent" 
+        "Parent",
+        back_populates="children" # ← tên attribute bên Parent
+    )                             #              ↓
+                                  #   phải khớp với cái này
+                                  #              ↓
+# class Parent:                   # ← "children" 
+#     children = relationship(...)
+```
+
 #### Giải thích chi tiết
 
 Trong database thuần SQL, quan hệ giữa bảng được tạo bằng:
