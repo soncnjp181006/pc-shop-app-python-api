@@ -1,4 +1,4 @@
-from .database import engine
+from database import engine
 from sqlalchemy.orm import sessionmaker
 
 SessionLocal=sessionmaker(

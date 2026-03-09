@@ -1,4 +1,4 @@
-from tests.src.core.settings import settings
+from src.core.settings import settings
 
 # Tạo kết nối engine
 from sqlalchemy import create_engine
