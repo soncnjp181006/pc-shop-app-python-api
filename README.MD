@@ -58,6 +58,16 @@
     - [7.2.3. Relationship](#723-relationship)
       - [Giải thích chi tiết](#giải-thích-chi-tiết)
     - [7.2.4. Ví dụ dành cho 7.2.3. Relationship](#724-ví-dụ-dành-cho-723-relationship)
+    - [7.2.5. Thao tác CRUD \& Query](#725-thao-tác-crud--query)
+      - [7.2.5.1. Chèn dữ liệu (INSERT)](#7251-chèn-dữ-liệu-insert)
+      - [7.2.5.2. Truy vấn (SELECT)](#7252-truy-vấn-select)
+      - [7.2.5.3. Lọc dữ liệu (WHERE)](#7253-lọc-dữ-liệu-where)
+      - [7.2.5.4. Sắp xếp \& Giới hạn (ORDER BY, LIMIT)](#7254-sắp-xếp--giới-hạn-order-by-limit)
+      - [7.2.5.5. JOIN (Các loại)](#7255-join-các-loại)
+      - [7.2.5.6. Cập nhật (UPDATE)](#7256-cập-nhật-update)
+      - [7.2.5.7. Xóa (DELETE)](#7257-xóa-delete)
+      - [7.2.5.8. Tổng hợp](#7258-tổng-hợp)
+      - [7.2.5.9. Cheat sheet nhanh](#7259-cheat-sheet-nhanh)
 
 > Môi trường phát triển Window
 
@@ -1508,3 +1518,271 @@ session.commit()
 | Đọc danh sách con | `SELECT WHERE parent_id=1` | `parent.children` |
 | Đọc cha của con | `SELECT WHERE id = parent_id` | `child.parent` |
 | Xóa cascade | `DELETE` theo FK | `session.delete(parent)` |
+
+### 7.2.5. Thao tác CRUD & Query
+
+**Ta có hai bảng được tạo như sau:**
+
+```python
+class Parent(Base):
+    __tablename__ = 'parents'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200))
+    age = Column(Integer)
+    children = relationship("Child", back_populates="parent", cascade="all, delete-orphan")
+
+class Child(Base):
+    __tablename__ = 'children'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200))
+    age = Column(Integer)
+    parent_id = Column(Integer, ForeignKey('parents.id'), nullable=False)
+    parent = relationship("Parent", back_populates="children")
+```
+
+#### 7.2.5.1. Chèn dữ liệu (INSERT)
+
+```python
+# Tạo Session đơn giản (hoặc dùng get_db)
+with Session(engine) as session:
+
+    # Cách 1: Tạo từng object rồi add
+    p1 = Parent(name="Nguyen Van A", age=40)
+    p2 = Parent(name="Tran Thi B", age=35)
+    session.add(p1)
+    session.add(p2)
+
+    # Cách 2: add nhiều cùng lúc
+    session.add_all([
+        Parent(name="Le Van C", age=45),
+        Parent(name="Pham Thi D", age=38),
+    ])
+
+    session.commit()  # ← Lưu vào DB, bắt buộc phải có
+
+    # Chèn có relationship
+    p = Parent(name="Hoang Van E", age=50)
+    p.children = [
+        Child(name="Hoang Con 1", age=10),
+        Child(name="Hoang Con 2", age=8),
+    ]
+    session.add(p)
+    session.commit()
+```
+
+#### 7.2.5.2. Truy vấn (SELECT)
+```python
+with Session(engine) as session:
+
+    # Lấy tất cả
+    parents = session.query(Parent).all()
+    # SQL: SELECT * FROM parents
+
+    # Lấy 1 theo id
+    p = session.get(Parent, 1)
+    # SQL: SELECT * FROM parents WHERE id = 1
+
+    # Lấy 1 theo điều kiện (trả về None nếu không có)
+    p = session.query(Parent).filter(Parent.name == "Nguyen Van A").first()
+    # SQL: SELECT * FROM parents WHERE name = 'Nguyen Van A' LIMIT 1
+
+    # Đếm
+    count = session.query(Parent).count()
+    # SQL: SELECT COUNT(*) FROM parents
+
+    # Chỉ lấy một số cột
+    results = session.query(Parent.name, Parent.age).all()
+    for name, age in results:
+        print(name, age)
+```
+
+#### 7.2.5.3. Lọc dữ liệu (WHERE)
+```python
+with Session(engine) as session:
+
+    # ✅ So sánh
+    session.query(Parent).filter(Parent.age == 40).all()
+    session.query(Parent).filter(Parent.age != 40).all()
+    session.query(Parent).filter(Parent.age > 35).all()
+    session.query(Parent).filter(Parent.age >= 35).all()
+
+    # ✅ AND – dùng dấu phẩy hoặc and_()
+    from sqlalchemy import and_
+    session.query(Parent).filter(Parent.age > 35, Parent.name == "Nguyen Van A").all()
+    session.query(Parent).filter(and_(Parent.age > 35, Parent.name == "Nguyen Van A")).all()
+
+    # OR
+    from sqlalchemy import or_
+    session.query(Parent).filter(or_(Parent.age < 36, Parent.age > 44)).all()
+
+    # IN
+    session.query(Parent).filter(Parent.age.in_([35, 40, 45])).all()
+    # SQL: WHERE age IN (35, 40, 45)
+
+    # NOT IN
+    session.query(Parent).filter(Parent.age.not_in([35, 40])).all()
+
+    # LIKE – tìm kiếm chuỗi
+    session.query(Parent).filter(Parent.name.like("%Nguyen%")).all()
+    # SQL: WHERE name LIKE '%Nguyen%'
+
+    # IS NULL / IS NOT NULL
+    session.query(Parent).filter(Parent.age == None).all()   # IS NULL
+    session.query(Parent).filter(Parent.age != None).all()   # IS NOT NULL
+
+    # BETWEEN
+    from sqlalchemy import between
+    session.query(Parent).filter(between(Parent.age, 35, 45)).all()
+    # SQL: WHERE age BETWEEN 35 AND 45
+```
+
+#### 7.2.5.4. Sắp xếp & Giới hạn (ORDER BY, LIMIT)
+
+```python
+with Session(engine) as session:
+
+    # ORDER BY tăng dần
+    session.query(Parent).order_by(Parent.age).all()
+
+    # ORDER BY giảm dần
+    from sqlalchemy import desc
+    session.query(Parent).order_by(desc(Parent.age)).all()
+
+    # LIMIT
+    session.query(Parent).limit(3).all()
+    # SQL: SELECT * FROM parents LIMIT 3
+
+    # OFFSET (bỏ qua N dòng đầu – dùng cho phân trang)
+    session.query(Parent).offset(2).limit(3).all()
+    # SQL: SELECT * FROM parents LIMIT 3 OFFSET 2
+
+    # Kết hợp: lấy top 3 người lớn tuổi nhất
+    session.query(Parent).order_by(desc(Parent.age)).limit(3).all()
+```
+
+
+#### 7.2.5.5. JOIN (Các loại)
+```
+parents               children
+┌────┬──────────┐    ┌────┬──────────┬───────────┐
+│ id │ name     │    │ id │ name     │ parent_id │
+├────┼──────────┤    ├────┼──────────┼───────────┤
+│ 1  │ Van A    │    │ 1  │ Con A1   │ 1         │
+│ 2  │ Thi B    │    │ 2  │ Con A2   │ 1         │
+│ 3  │ Van C    │    │ 3  │ Con B1   │ 2         │
+│ 4  │ Thi D    │    └────┴──────────┴───────────┘
+└────┴──────────┘    (Thi D không có con)
+```
+
+```python
+with Session(engine) as session:
+
+    # INNER JOIN – chỉ lấy các cặp có liên kết (Thi D bị loại)
+    results = session.query(Parent, Child).join(Child).all()
+    # SQL: SELECT * FROM parents INNER JOIN children ON children.parent_id = parents.id
+    for parent, child in results:
+        print(f"{parent.name} → {child.name}")
+    # Van A → Con A1
+    # Van A → Con A2
+    # Thi B → Con B1
+
+    # LEFT JOIN – giữ tất cả Parent, Child không có thì None (Thi D vẫn xuất hiện)
+    from sqlalchemy import outerjoin
+    results = session.query(Parent, Child).outerjoin(Child).all()
+    # SQL: SELECT * FROM parents LEFT JOIN children ON children.parent_id = parents.id
+    for parent, child in results:
+        child_name = child.name if child else "Không có con"
+        print(f"{parent.name} → {child_name}")
+    # Van A   → Con A1
+    # Van A   → Con A2
+    # Thi B   → Con B1
+    # Thi D   → Không có con  ← vẫn xuất hiện
+
+    # JOIN với filter kết hợp
+    results = (
+        session.query(Parent, Child)
+        .join(Child)
+        .filter(Parent.age > 35)
+        .order_by(Parent.name)
+        .all()
+    )
+
+    # Chỉ lấy cột cần thiết từ JOIN
+    results = (
+        session.query(Parent.name, Child.name)
+        .join(Child)
+        .all()
+    )
+    for parent_name, child_name in results:
+        print(parent_name, child_name)
+```
+
+#### 7.2.5.6. Cập nhật (UPDATE)
+
+```python
+with Session(engine) as session:
+
+    # Cách 1: lấy ra rồi sửa
+    p = session.get(Parent, 1)
+    p.name = "Nguyen Van A (đã sửa)"
+    p.age = 41
+    session.commit()
+
+    # Cách 2: update hàng loạt
+    session.query(Parent).filter(Parent.age < 36).update({"age": 36})
+    session.commit()
+    # SQL: UPDATE parents SET age = 36 WHERE age < 36
+```
+
+#### 7.2.5.7. Xóa (DELETE)
+```python
+with Session(engine) as session:
+
+    # Xóa 1 object
+    p = session.get(Parent, 1)
+    session.delete(p)
+    session.commit()
+    # cascade="all, delete-orphan" → tự xóa children luôn
+
+    # Xóa hàng loạt theo điều kiện
+    session.query(Child).filter(Child.age < 5).delete()
+    session.commit()
+    # SQL: DELETE FROM children WHERE age < 5
+```
+
+#### 7.2.5.8. Tổng hợp
+
+```python
+from sqlalchemy import func
+
+with Session(engine) as session:
+
+    session.query(func.count(Parent.id)).scalar()    # đếm
+    session.query(func.sum(Parent.age)).scalar()     # tổng
+    session.query(func.avg(Parent.age)).scalar()     # trung bình
+    session.query(func.max(Parent.age)).scalar()     # lớn nhất
+    session.query(func.min(Parent.age)).scalar()     # nhỏ nhất
+
+    # GROUP BY – đếm số con theo từng cha
+    results = (
+        session.query(Parent.name, func.count(Child.id).label("so_con"))
+        .join(Child)
+        .group_by(Parent.id)
+        .all()
+    )
+    for name, so_con in results:
+        print(f"{name}: {so_con} con")
+```
+
+
+#### 7.2.5.9. Cheat sheet nhanh
+```
+INSERT  → session.add() + session.commit()
+SELECT  → session.query(Model).all() / .first() / .one()
+WHERE   → .filter(điều kiện)
+ORDER   → .order_by(col) / .order_by(desc(col))
+LIMIT   → .limit(n).offset(n)
+JOIN    → .join(Model) / .outerjoin(Model)
+UPDATE  → lấy ra → sửa → commit  |  hoặc .update({})
+DELETE  → session.delete(obj)     |  hoặc .delete()
+```
