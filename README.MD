@@ -51,6 +51,13 @@
       - [7.1.10.1. Các hàm tổng hợp (Aggregate Functions)](#71101-các-hàm-tổng-hợp-aggregate-functions)
       - [7.1.10.2. GROUP BY (Nhóm theo cột)](#71102-group-by-nhóm-theo-cột)
       - [7.1.10.3. HAVING (Lọc sau khi nhóm)](#71103-having-lọc-sau-khi-nhóm)
+  - [7.2. SQLALCHEMY](#72-sqlalchemy)
+    - [7.2.1. Tạo kết nối Engine \& Session làm việc với database](#721-tạo-kết-nối-engine--session-làm-việc-với-database)
+    - [7.2.2. Định nghĩa Declarative Base](#722-định-nghĩa-declarative-base)
+    - [7.2.2.1.  Định nghĩa Model, ánh xạ tới Table](#7221--định-nghĩa-model-ánh-xạ-tới-table)
+    - [7.2.3. Relationship](#723-relationship)
+      - [Giải thích chi tiết](#giải-thích-chi-tiết)
+    - [7.2.4. Ví dụ dành cho 7.2.3. Relationship](#724-ví-dụ-dành-cho-723-relationship)
 
 > Môi trường phát triển Window
 
@@ -1170,3 +1177,317 @@ GROUP BY user_id
 HAVING COUNT() > 5;
 ```
 
+## 7.2. SQLALCHEMY
+
+### 7.2.1. Tạo kết nối Engine & Session làm việc với database
+
+> [!NOTE]
+> `engine` kết nối database.
+>
+> `session` làm việc với database.
+
+> [!Caution]
+> Để học SQLALCHEMY, ta sẽ dùng đoạn code dưới đây làm phần đầu của file code cho các phần kế tiếp thuộc [7.2. SQLALCHEMY](#72-sqlalchemy)
+
+```python
+# settings, lưu cấu hình kết nối engine 
+# sau này, sẽ triển khai nó vào file .env
+settings = {
+    "DATABASE_URL" : "mysql+pymysql://root:password@localhost:3306/shop_db",
+    "DEBUG": True,
+    "POOL_SIZE": 10,
+    "MAX_OVERFLOW": 20,
+    "POOL_PRE_PING": True
+}
+
+# Kết nối database
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    settings["DATABASE_URL"],
+    echo=settings["DEBUG"],
+    pool_size=settings["POOL_SIZE"],
+    max_overflow=settings["MAX_OVERFLOW"],
+    pool_pre_ping=settings["POOL_PRE_PING"]
+)
+
+
+# Tạo session làm việc với database
+from sqlalchemy.orm import sessionmaker
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db(): # session
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+```
+
+### 7.2.2. Định nghĩa Declarative Base
+
+```python
+from sqlalchemy.orm import declarative_base
+Base = declarative_base()
+```
+
+> [!Caution]
+> `Base` là class ORM bảng. Class định nghĩa cấu trúc bảng.
+
+### 7.2.2.1.  Định nghĩa Model, ánh xạ tới Table
+
+```python
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String
+Base = declarative_base()
+
+# Tạo bảng
+class User(Base):
+    # Tên bảng trong cơ sở dữ liệu
+    __tablename__ = 'users'
+    
+    # Các cột trong bảng
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+
+    # Phương thức biểu diễn đối tượng khi in (debug)
+    def __repr__(self):
+        return f"<User(username=self.username, email=self.email)>"
+        '''Khi build thử, terminal hiện:
+            CREATE TABLE users (
+                    id INTEGER NOT NULL AUTO_INCREMENT,
+                    username VARCHAR(50) NOT NULL,
+                    email VARCHAR(100) NOT NULL,
+                    PRIMARY KEY (id),
+                    UNIQUE (username),
+                    UNIQUE (email)
+            )
+        '''
+
+# Tạo tất cả các bảng dựa trên các class đã định nghĩa trong Base
+Base.metadata.create_all(engine)
+print('Tạo các bảng chưa tồn tại thành công')
+```
+
+### 7.2.3. Relationship
+
+> [!NOTE]
+> Relationship là cơ chế liên kết các lớp model lại với nhau để phản ánh mối quan hệ giữa các bảng trong cơ sở dữ liệu. Thay vì sử dụng câu lệnh JOIN thủ công, ORM cho phép ta truy cập dữ liệu liên quan thông qua thuộc tính đối tượng.
+
+
+```python
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import Column, Integer, String, ForeignKey
+Base = declarative_base()
+
+class Parent(Base):
+    __tablename__ = 'parents'
+    id=Column(Integer, primary_key=True)
+    name=Column(String(200))
+
+    # Relationship
+    # Một cha có nhiều con
+    # relationship đặt ở phía cha để truy cập danh sách con 
+    children = relationship(
+        "Child",
+        back_populates="parent",
+        cascade="all, delete-orphan"
+    )
+
+class Child(Base):
+    __tablename__ = 'childen'
+    id=Column(Integer, primary_key=True)
+    name=Column(String(200))
+
+    # Khóa ngoại nằm ở bảng con
+    parent_id = Column(
+                    Integer, 
+                    ForeignKey('parents.id'), # ForeignKey('<tên bảng cha>.<PK>')
+                    nullable=False
+                )
+
+    # Quan hệ ngược lại: Một con thuộc về một cha
+    parent = relationship(
+        "Parent", 
+        back_populates="children"
+    )
+
+        
+# Tạo tất cả các bảng dựa trên các class đã định nghĩa trong Base
+Base.metadata.create_all(engine)
+print('Tạo các bảng chưa tồn tại thành công')
+```
+
+**Giải thích:**
+
+> [!NOTE]
+> `relationship()` là một ORM-level link – nó không tạo cột trong database, mà chỉ cho SQLAlchemy biết cách "nối" hai object Python với nhau thông qua khóa ngoại đã có
+
+Cấu trúc trong code:
+
+```
+Database thực tế:               Python ORM:
+                                
+parents table                   Parent object
+┌────┬──────┐                   ├── id
+│ id │ name │                   ├── name
+└────┴──────┘                   └── children ← relationship() (list of Child)
+     ▲
+     │ ForeignKey
+     │
+children table                  Child object
+┌────┬──────┬───────────┐       ├── id
+│ id │ name │ parent_id │       ├── name
+└────┴──────┴───────────┘       ├── parent_id  ← cột thật trong DB
+                                └── parent ← relationship() (một Parent)
+```
+
+*Phía Parent:*
+```python
+children = relationship(
+    "Child",                    # Trỏ tới class nào
+    back_populates="children",  # Tên attribute bên Child trỏ ngược lại
+    cascade="all, delete-orphan"# Khi xóa Parent -> tự xóa Child luôn
+)
+```
+
+*Phía Child:*
+```python
+parent = relationship(
+    "Parent",                   # Trỏ tới class nào
+    back_populates="children"   # Phải khớp với tên attribute bên Parent
+)
+```
+
+> `back_populates` = "tao và mày liên kết với nhau" – phải khai báo cả 2 phía và tên phải khớp chéo nhau
+
+#### Giải thích chi tiết
+
+Trong database thuần SQL, quan hệ giữa bảng được tạo bằng:
++ `PRIMARY KEY`
++ `FOREIGN KEY`
+
+Ví dụ:
+
+```sql
+parents
+-------
+id (PK)
+name
+
+children
+-------
+id (PK)
+name
+parent_id (FK -> parents.id)
+```
+
+Quan hệ:
+
+```
+1 Parent  ----  many Children
+```
+
+SQL thuần khi truy vấn:
+
+```sql
+SELECT *
+FROM parents
+JOIN children ON parents.id = children.parent_id;
+```
+
+Nhưng khi dùng ORM, ta không muốn viết `JOIN` thủ công. SQLAlchemy cung cấp:
+
+```python
+relationship()
+```
+
+`relationship()` dùng để:
++ ánh xạ quan hệ giữa object Python
++ tự động xử lý `JOIN` khi cần
+
+**Cách ORM nhìn dữ liệu:**
+
+database:
+
+```python
+parents
+   id=1 name="John"
+
+children
+   id=1 name="Tom" parent_id=1
+   id=2 name="Anna" parent_id=1
+```
+
+ORM sẽ ánh xạ thành object:
+
+```python
+Parent(
+    id=1,
+    name="John",
+    children=[
+        Child(id=1, name="Tom"),
+        Child(id=2, name="Anna")
+    ]
+)
+```
+
+`relationship` giúp, trả về list object Child:
+
+```python
+parent.children
+```
+
+### 7.2.4. Ví dụ dành cho [7.2.3. Relationship](#723-relationship)
+
+```python
+# Tạo quan hệ – cách 1: gán qua parent
+p = Parent(name="Nguyen Van A")
+c1 = Child(name="Con Thu Nhat", parent=p)   # SQLAlchemy tự set parent_id
+c2 = Child(name="Con Thu Hai",  parent=p)
+
+# Tạo quan hệ – cách 2: append vào list
+p = Parent(name="Nguyen Van A")
+p.children.append(Child(name="Con Thu Nhat"))
+p.children.append(Child(name="Con Thu Hai"))
+
+session.add(p)
+session.commit()
+# SQL thực thi:
+# INSERT INTO parents (name) VALUES ('Nguyen Van A')  → lấy id=1
+# INSERT INTO children (name, parent_id) VALUES ('Con Thu Nhat', 1)
+# INSERT INTO children (name, parent_id) VALUES ('Con Thu Hai', 1)
+```
+
+```python
+# Truy cập dữ liệu
+p = session.get(Parent, 1)
+print(p.children)       # [<Child 'Con Thu Nhat'>, <Child 'Con Thu Hai'>]
+# SQL: SELECT * FROM children WHERE parent_id = 1
+
+c = session.get(Child, 1)
+print(c.parent.name)    # 'Nguyen Van A'
+# SQL: SELECT * FROM parents WHERE id = 1
+```
+
+```python
+# cascade="all, delete-orphan" hoạt động thế này:
+session.delete(p)
+session.commit()
+# SQL:
+# DELETE FROM children WHERE parent_id = 1  ← tự động!
+# DELETE FROM parents WHERE id = 1
+```
+
+**Điều thực sự xảy ra trong DB vs ORM**
+
+| Hành động | Trong DB | Trong ORM |
+|---|---|---|
+| Lưu quan hệ | `parent_id = 1` (cột thật) | `child.parent = p` |
+| Đọc danh sách con | `SELECT WHERE parent_id=1` | `parent.children` |
+| Đọc cha của con | `SELECT WHERE id = parent_id` | `child.parent` |
+| Xóa cascade | `DELETE` theo FK | `session.delete(parent)` |
