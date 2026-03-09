@@ -68,6 +68,16 @@
       - [7.2.5.7. Xóa (DELETE)](#7257-xóa-delete)
       - [7.2.5.8. Tổng hợp](#7258-tổng-hợp)
       - [7.2.5.9. Cheat sheet nhanh](#7259-cheat-sheet-nhanh)
+- [Phần 8. \[`tests/`\] - Thiết kế API cho USER đăng nhập, đăng ký](#phần-8-tests---thiết-kế-api-cho-user-đăng-nhập-đăng-ký)
+  - [8.1. Cấu hình nhạy cảm `.env`](#81-cấu-hình-nhạy-cảm-env)
+  - [8.2. Import cấu hình nhạy cảm vào file `tests/src/core/settings.py`](#82-import-cấu-hình-nhạy-cảm-vào-file-testssrccoresettingspy)
+    - [8.2.1. Cấu trúc sườn](#821-cấu-trúc-sườn)
+    - [8.2.2. Import cấu hình](#822-import-cấu-hình)
+    - [8.3. Tạo cấu hình `engine` và `session`](#83-tạo-cấu-hình-engine-và-session)
+    - [8.3.1. `database.py`](#831-databasepy)
+    - [8.3.2. `session.py`](#832-sessionpy)
+  - [8.4. Tạo API cho tài khoản đăng ký mới](#84-tạo-api-cho-tài-khoản-đăng-ký-mới)
+    - [8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreate.py`](#841-cấu-trúc-dữ-liệu-cho-việc-đăng-ký-tài-khoản---schemasusersusercreatepy)
 
 > Môi trường phát triển Window
 
@@ -1785,4 +1795,300 @@ LIMIT   → .limit(n).offset(n)
 JOIN    → .join(Model) / .outerjoin(Model)
 UPDATE  → lấy ra → sửa → commit  |  hoặc .update({})
 DELETE  → session.delete(obj)     |  hoặc .delete()
+```
+
+# Phần 8. [`tests/`] - Thiết kế API cho USER đăng nhập, đăng ký
+
+> [!CAUTION]
+> Folder `tests/` có cấu trúc tổ chức code, thư mục như `pc-shop-app-api/`.
+
+```
+pc-shop-app-api/
+└── tests/
+    └── src/
+        ├── core/
+        ├── database/
+        │   ├── models/
+        │   ├── repositories/
+        │   └── migrations/
+        ├── schemas/
+        ├── services/
+        ├── api/
+        │   └── routers/
+        └── dependencies/   
+```
+
+## 8.1. Cấu hình nhạy cảm `.env`
+
+```env
+# DATABASE_URL = "mysql+pymysql://root:password@localhost:3306/shop_db"
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=e_commerce
+DB_USER=your_name
+DB_PASSWORD=your_password
+POOL_SIZE=10          # số kết nối tối thiểu
+MAX_OVERFLOW=20       # số kết nối mở thêm khi quá tải -> max 30 kết nối
+POOL_PRE_PING=True    # kiểm tra Ping trước khi bắt đầu
+DEBUG=True      
+```
+
+Tương đương, tuy chưa import vào file `settings.py`:
+
+```python
+settings = {
+    "DATABASE_URL" : "mysql+pymysql://root:password@localhost:3306/shop_db",
+    "DEBUG": True,
+    "POOL_SIZE": 10,
+    "MAX_OVERFLOW": 20,
+    "POOL_PRE_PING": True
+}
+```
+
+## 8.2. Import cấu hình nhạy cảm vào file `tests/src/core/settings.py`
+
+### 8.2.1. Cấu trúc sườn
+```python
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    
+    # Import cấu hình từ .env
+
+    class Config:
+        env_file='tests/.env' # path
+        env_file_encoding='utf-8'
+        case_sensitive=True # phân biệt hoa thường
+
+# Cho phép tái sử dụng
+@lru_cache
+def get_setting() -> Settings:
+    return Settings()
+
+# Instance , dùng trực tiếp: from .test.core import settings
+settings = Settings()
+```
+
+### 8.2.2. Import cấu hình
+
+```python
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    
+    # Database - Import cấu hình từ .env
+    DB_HOST:str='localhost'
+    DB_PORT:int=3306
+    DB_NAME:str
+    DB_USER:str
+    DB_PASSWORD:str
+    POOL_SIZE:int=10          # số kết nối tối thiểu
+    MAX_OVERFLOW:int=20       # số kết nối mở thêm khi quá tải -> max 30 kết nối
+    POOL_PRE_PING:int=True    # kiểm tra Ping trước khi bắt đầu
+    DEBUG:bool=True   
+
+    @property # Bình thường khi gọi: fun() -> trở thành fun
+    def DATABASE_URL(self) -> str:
+        return(
+            f'mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}'
+            f'@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}'
+            f'?charset=utf8mb4' # hỗ trợ emoji và kí tự đặc biệt
+        )
+
+
+    class Config:
+        env_file='test/.env' # path
+        env_file_encoding='utf-8'
+        case_sensitive=True # phân biệt hoa thường
+
+# Cho phép tái sử dụng
+@lru_cache
+def get_setting() -> Settings:
+    return Settings()
+
+# Instance , dùng trực tiếp: from .test.core import settings
+settings = Settings()
+```
+
+Cấu hình ta import là:
+
+```python
+DB_HOST:str='localhost'
+DB_PORT:int=3306
+DB_NAME:str
+DB_USER:str
+DB_PASSWORD:str
+POOL_SIZE:int=10
+
+@property # Bình thường khi gọi: fun() -> trở thành fun
+def DATABASE_URL(self) -> str:
+    return(
+        f'mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}'
+        f'@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}'
+        f'?charset=utf8mb4' # hỗ trợ emoji và kí tự đặc biệt
+    )
+```
+
+### 8.3. Tạo cấu hình `engine` và `session`
+
+```
+tests/
+└── src/
+    └── database/
+        ├── database.py # Tạo engine (kết nối database, cấu hình engine)    
+        ├── session.py  #  Quản lý session (tránh rò rỉ khi kết nối)
+        ├── models/
+        ├── repositories/
+        └── migrations/
+```
+
+### 8.3.1. `database.py`
+
+> [!NOTE]
+> Import cấu hình từ `core/settings.py` để tạo kết nối `engine`.
+
+```python
+from tests.src.core.settings import settings
+
+# Tạo kết nối engine
+from sqlalchemy import create_engine
+
+engine=create_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_size=settings.POOL_SIZE,
+    max_overflow=settings.MAX_OVERFLOW,
+    pool_pre_ping=settings.POOL_PRE_PING
+)
+```
+
+Như vậy, ta đã có kết nối engine giống với:
+
+```python
+engine = create_engine(
+    settings["DATABASE_URL"],
+    echo=settings["DEBUG"],
+    pool_size=settings["POOL_SIZE"],
+    max_overflow=settings["MAX_OVERFLOW"],
+    pool_pre_ping=settings["POOL_PRE_PING"]
+)
+```
+
+### 8.3.2. `session.py`
+
+```python
+from .database import engine
+from sqlalchemy.orm import sessionmaker
+
+SessionLocal=sessionmaker(
+    autocommit=False, # Không tự lưu
+    autoflush=False,
+    bind=engine
+)
+
+# session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback() # hủy thao tác, trở về trước khi thay đổi (lần commit cuối)
+        raise # ném lỗi
+    finally:
+        db.close() 
+```
+
+## 8.4. Tạo API cho tài khoản đăng ký mới
+
+**Thư mục lưu trữ các file làm: Bộ lọc cấu trúc dữ liệu đầu vào, đầu ra - `tests/src/schemas/`:**
+
+```
+tests/
+└── src/
+    └── schemas/    
+        └── users/ # Chứa các file định nghĩa cấu trúc dữ liệu dành cho user
+            └── UserCreateSchemas.py  # File định nghĩa dữ liệu cho việc tạo tài khoản mới của user
+```
+
+**Thư mục lưu trữ các file tạo: Cấu trúc bảng - `tests/src/database/models`:**
+
+```
+test
+└── src/
+    └── database/    
+        └── models/ 
+            └── users/ # Chứa các file cấu trúc bảng dành cho user
+                └── UserCreateTable.py
+```
+
+**Thư mục xử lý nghiệp vụ: `tests/src/database/services/`:**
+
+```
+test
+└── src/
+    └── services/    
+        └── users/ # Chứa các file nghiệp vụ dành cho user
+            └── UserCreateServies.py
+```
+
+**Thư mục `tests/src/database/api`:**
+```
+test
+└── src/
+    └── api/    
+        ├── routers/ 
+        │   └── users/
+        │       └── UserCreateRouter.py
+        └── api_router.py  # File import các router, nhóm các router
+```
+
+**File `test/src/app.py`**
+```
+test
+└── src/
+    └── app.py # File chạy backend, import nội dung từ file api_router.py
+```
+
+### 8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreate.py`
+
+```python
+from sqlalchemy import Integer, String
+from pydantic import BaseModel, EmailStr, Field, validator
+from typing import Optional, Dict
+import re
+
+class UserCreate(BaseModel):
+    '''
+        Class đăng ký tài khoản
+        Chứa dữ liệu đăng ký tài khoản
+    '''
+
+    email:EmailStr
+    # field_name: type = Field(các_ràng_buộc)
+    # ...: bắt buộc phải có
+    # pattern=r"^[a-zA-Z0-9_]+$" -> regex
+    # ^                bắt đầu chuỗi
+    # [a-zA-Z0-9_]     cho phép ký tự
+    # +                lặp 1 hoặc nhiều lần
+    # $                kết thúc chuỗi
+    username:str=Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
+    full_name:str=Field(..., min_length=2, max_length=255)
+    password:str=Field(..., min_length=8, max_length=100)
+    # Optional[T] -> T hoặc là None. Bỏ trống -> None
+    phone:Optional[str]=None
+
+    # viết logic kiểm tra dữ liệu tùy chỉnh cho một field
+    # @validator("tên_field")
+    # def validate_field(cls, value):
+    #     ...
+    @validator('password') 
+    def password_strength(cls, v):
+        '''Mật khẩu phải có ít nhất một chữ hoa, 1 số'''
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Mật khẩu phải có ít nhất 1 chữ hoa")
+        if not re.search(r"\d", v):
+            raise ValueError("Mật khẩu phải có ít nhất 1 chữ số")
+        return v
 ```
