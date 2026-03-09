@@ -1286,12 +1286,12 @@ Base = declarative_base()
 
 class Parent(Base):
     __tablename__ = 'parents'
-    id=Column(Integer, primary_key=True)
-    name=Column(String(200))
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200))
 
     # Relationship
     # Một cha có nhiều con
-    # relationship đặt ở phía cha để truy cập danh sách con 
+    # relationship đặt ở phía cha để truy cập danh sách con
     children = relationship(
         "Child",
         back_populates="parent",
@@ -1299,24 +1299,23 @@ class Parent(Base):
     )
 
 class Child(Base):
-    __tablename__ = 'childen'
-    id=Column(Integer, primary_key=True)
-    name=Column(String(200))
+    __tablename__ = 'children' 
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200))
 
     # Khóa ngoại nằm ở bảng con
     parent_id = Column(
-                    Integer, 
-                    ForeignKey('parents.id'), # ForeignKey('<tên bảng cha>.<PK>')
+                    Integer,
+                    ForeignKey('parents.id'),  # ForeignKey('<tên bảng cha>.<PK>')
                     nullable=False
                 )
 
     # Quan hệ ngược lại: Một con thuộc về một cha
     parent = relationship(
-        "Parent", 
+        "Parent",
         back_populates="children"
     )
 
-        
 # Tạo tất cả các bảng dựa trên các class đã định nghĩa trong Base
 Base.metadata.create_all(engine)
 print('Tạo các bảng chưa tồn tại thành công')
