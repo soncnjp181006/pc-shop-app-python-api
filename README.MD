@@ -77,7 +77,11 @@
     - [8.3.1. `database.py`](#831-databasepy)
     - [8.3.2. `session.py`](#832-sessionpy)
   - [8.4. Tạo API cho tài khoản đăng ký mới](#84-tạo-api-cho-tài-khoản-đăng-ký-mới)
-    - [8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreate.py`](#841-cấu-trúc-dữ-liệu-cho-việc-đăng-ký-tài-khoản---schemasusersusercreatepy)
+    - [8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreateSchemas.py`](#841-cấu-trúc-dữ-liệu-cho-việc-đăng-ký-tài-khoản---schemasusersusercreateschemaspy)
+    - [8.4.2. Tạo class phân quyền người dùng (các quyền người dùng là hằng số) - `enums/users/UserRole.py`](#842-tạo-class-phân-quyền-người-dùng-các-quyền-người-dùng-là-hằng-số---enumsusersuserrolepy)
+    - [8.4.3. Tạo class `Base` - dùng để tạo bảng `database/base.py`](#843-tạo-class-base---dùng-để-tạo-bảng-databasebasepy)
+    - [8.4.4 Tạo bảng `user` - dùng cho đăng ký, đăng nhập tài khoản - `models/users/UserTable.py`](#844-tạo-bảng-user---dùng-cho-đăng-ký-đăng-nhập-tài-khoản---modelsusersusertablepy)
+    - [8.4.5. `database/__init__.py`](#845-database__init__py)
 
 > Môi trường phát triển Window
 
@@ -2009,7 +2013,16 @@ tests/
 └── src/
     └── schemas/    
         └── users/ # Chứa các file định nghĩa cấu trúc dữ liệu dành cho user
-            └── UserCreateSchemas.py  # File định nghĩa dữ liệu cho việc tạo tài khoản mới của user
+            └── UserCreateSchemas.py  # File định nghĩa dữ liệu đầu vào cho việc tạo tài khoản mới của user
+```
+
+**Thư mục lưu trữ các file, giá trị là hằng số - `tests/src/enums`:**
+```
+test
+└── src/
+    └── enums/    
+        └── users/ # Chứa các hằng số
+            └── UserRole.py # Các hằng số phân quyền người dùng
 ```
 
 **Thư mục lưu trữ các file tạo: Cấu trúc bảng - `tests/src/database/models`:**
@@ -2018,9 +2031,10 @@ tests/
 test
 └── src/
     └── database/    
-        └── models/ 
-            └── users/ # Chứa các file cấu trúc bảng dành cho user
-                └── UserCreateTable.py
+        ├── models/ 
+        │   └── users/ # Chứa các file cấu trúc bảng dành cho user
+        │       └── UserTable.py # Bảng User
+        └── base.py # tạo class Base = declarative_base() -> import vào các file cấu trúc bảng  
 ```
 
 **Thư mục xử lý nghiệp vụ: `tests/src/database/services/`:**
@@ -2030,7 +2044,7 @@ test
 └── src/
     └── services/    
         └── users/ # Chứa các file nghiệp vụ dành cho user
-            └── UserCreateServies.py
+            └── UserCreateServies.py # Nghiệp vụ tạo tài khoản mới
 ```
 
 **Thư mục `tests/src/database/api`:**
@@ -2040,7 +2054,7 @@ test
     └── api/    
         ├── routers/ 
         │   └── users/
-        │       └── UserCreateRouter.py
+        │       └── UserCreateRouter.py # Route tạo tài khoản mới
         └── api_router.py  # File import các router, nhóm các router
 ```
 
@@ -2051,7 +2065,7 @@ test
     └── app.py # File chạy backend, import nội dung từ file api_router.py
 ```
 
-### 8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreate.py`
+### 8.4.1. Cấu trúc dữ liệu cho việc "đăng ký tài khoản" - `schemas/users/UserCreateSchemas.py`
 
 ```python
 from sqlalchemy import Integer, String
@@ -2091,4 +2105,70 @@ class UserCreate(BaseModel):
         if not re.search(r"\d", v):
             raise ValueError("Mật khẩu phải có ít nhất 1 chữ số")
         return v
+```
+
+### 8.4.2. Tạo class phân quyền người dùng (các quyền người dùng là hằng số) - `enums/users/UserRole.py`
+
+```python
+from enum import Enum
+
+class UserRole(str, Enum):
+    '''Phân quyền người dùng'''
+    CUSTOMER='customer'
+    ADMIN='admin'
+    STAFF='staff'
+```
+
+
+### 8.4.3. Tạo class `Base` - dùng để tạo bảng `database/base.py`
+
+```python
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
+```
+
+
+
+### 8.4.4 Tạo bảng `user` - dùng cho đăng ký, đăng nhập tài khoản - `models/users/UserTable.py`
+
+```python
+from datetime import datetime
+from sqlalchemy import (
+    Column, Integer, String, Boolean,
+    DateTime, Enum, ForeignKey, Text
+)
+
+from tests.src.database.base import Base
+from tests.src.enums.users import UserRole
+
+class User(Base):
+    __tablename__ = 'users'
+    role=Column(Enum(UserRole), default=UserRole.CUSTOMER,nullable=False)
+    id=Column(Integer, primary_key=True, index=True)
+    email=Column(String(255), unique=True, nulltable=False, index=True)
+    password = Column(String(255), nullable=False)
+    phone        = Column(String(20), nullable=True)
+    avatar_url   = Column(String(500), nullable=True)
+    is_active    = Column(Boolean, default=True)
+    is_verified  = Column(Boolean, default=False)   # Email verification
+    created_at   = Column(DateTime, default=datetime.utcnow)
+    updated_at   = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login   = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<User id={self.id} email={self.email}>"
+```
+
+### 8.4.5. `database/__init__.py`
+```python
+from tests.src.database.models.users.UserTable import Base, User, UserRole
+from tests.src.database.database import engine
+
+__all__ = [
+    "User", "UserRole"
+]
+
+# Tạo toàn bộ các bảng
+Base.metadata.create_table(engine)
 ```
