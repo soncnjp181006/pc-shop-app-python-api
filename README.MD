@@ -1600,13 +1600,13 @@ with Session(engine) as session:
 ```python
 with Session(engine) as session:
 
-    # ✅ So sánh
+    # So sánh
     session.query(Parent).filter(Parent.age == 40).all()
     session.query(Parent).filter(Parent.age != 40).all()
     session.query(Parent).filter(Parent.age > 35).all()
     session.query(Parent).filter(Parent.age >= 35).all()
 
-    # ✅ AND – dùng dấu phẩy hoặc and_()
+    # AND – dùng dấu phẩy hoặc and_()
     from sqlalchemy import and_
     session.query(Parent).filter(Parent.age > 35, Parent.name == "Nguyen Van A").all()
     session.query(Parent).filter(and_(Parent.age > 35, Parent.name == "Nguyen Van A")).all()
